@@ -2,3 +2,7 @@ discord.py
 python-dotenv
 pypresence
 discord.py-self
+python-dotenv
+fastapi
+uvicorn
+

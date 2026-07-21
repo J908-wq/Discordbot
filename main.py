@@ -2,49 +2,32 @@ import discord
 import os
 import asyncio
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize FastAPI and Discord Client
 app = FastAPI()
 client = discord.Client(intents=discord.Intents.none())
 
-# Secure your endpoint with a secret token
-CRON_SECRET = os.getenv("CRON_SECRET", "super-secret-key")
-
+# This matches the endpoint cron-job.org will look for
 @app.get("/")
+@app.get("/ping")
 def health_check():
-    return {"status": "Alive"}
-
-@app.get("/trigger-task")
-async def trigger_task(authorization: str = Header(None)):
-    # 1. Security Check
-    if not authorization or authorization != f"Bearer {CRON_SECRET}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    # 2. Trigger your Discord logic safely inside the async loop
-    if client.is_ready():
-        # Example task: Update presence or send a message
-        print("⏰ Cron-job.org triggered the task!")
-        
-        activity = discord.Activity(
-            type=discord.ActivityType.playing,
-            name="Arch Linux",
-            details="Triggered by Cron Job",
-            state="Status: Active"
-        )
-        asyncio.create_task(client.change_presence(activity=activity))
-        return {"status": "Task executed successfully"}
-    
-    return {"status": "Bot not ready yet"}
+    print("⏰ Cron-job.org ping received! Keeping the bot alive...")
+    return {"status": "Alive and running"}
 
 @client.event
 async def on_ready():
-    print(f'Successfully authenticated account: {self.user}')
+    print(f'🤖 Successfully authenticated account: {client.user}')
+    activity = discord.Activity(
+        type=discord.ActivityType.playing,
+        name="Arch Linux",
+        details="Running 24/7 in the cloud",
+        state="Uptime: 100%"
+    )
+    await client.change_presence(activity=activity)
 
-# Start both FastAPI and Discord simultaneously inside the same event loop
 async def main():
     token = os.getenv("DISCORD_TOKEN")
     if not token:
@@ -52,12 +35,10 @@ async def main():
         return
 
     port = int(os.environ.get("PORT", 10000))
-    
-    # Run Uvicorn config without block
     config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
     server = uvicorn.Server(config)
     
-    # Run both tasks concurrently
+    # Run both the web server and the Discord client concurrently
     await asyncio.gather(
         server.serve(),
         client.start(token)
