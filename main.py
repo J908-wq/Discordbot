@@ -47,4 +47,16 @@ intents = discord.Intents.default()
 intents.presences = True  # Required to update or change presence status
 
 client = MyClient(intents=intents)
-client.run(os.getenv("DISCORD_TOKEN"))
+# Fetch the token from environment variables
+token = os.getenv("DISCORD_TOKEN")
+
+# Verify the token exists before passing it to discord.py
+if not token:
+    print("❌ ERROR: DISCORD_TOKEN environment variable is missing or empty on Render!")
+elif len(token) < 50:
+    print(f"❌ ERROR: The token found seems too short ({len(token)} chars). Check for typos.")
+else:
+    # Start Discord safely
+    client = MyClient(intents=intents)
+    client.run(token)
+
