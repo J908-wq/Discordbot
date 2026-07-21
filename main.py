@@ -1,55 +1,67 @@
 import discord
 import os
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import asyncio
+import uvicorn
+from fastapi import FastAPI, Header, HTTPException
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# 1. Tiny web server for Render's free tier health check
-class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        # Handle the root URL "/" or a specific path like "/ping"
-        if self.path in ["/", "/ping"]:
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(b"Alive")
-        else:
-            self.send_response(404)
-            self.end_headers()
+# Initialize FastAPI and Discord Client
+app = FastAPI()
+client = discord.Client(intents=discord.Intents.none())
 
-    def log_message(self, format, *args):
-        return  # Suppress logs to keep Render console clean
+# Secure your endpoint with a secret token
+CRON_SECRET = os.getenv("CRON_SECRET", "super-secret-key")
 
-def run_web_server():
-    port = int(os.environ.get("PORT", 10000))
-    print(f"📡 Starting web server on port {port}...")
-    server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
-    server.serve_forever()
+@app.get("/")
+def health_check():
+    return {"status": "Alive"}
 
-# 2. User Account Status Client
-class MyClient(discord.Client):
-    async def on_ready(self):
-        print(f'Successfully authenticated account: {self.user}')
+@app.get("/trigger-task")
+async def trigger_task(authorization: str = Header(None)):
+    # 1. Security Check
+    if not authorization or authorization != f"Bearer {CRON_SECRET}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    # 2. Trigger your Discord logic safely inside the async loop
+    if client.is_ready():
+        # Example task: Update presence or send a message
+        print("⏰ Cron-job.org triggered the task!")
         
-        # Explicit Custom Activity status
         activity = discord.Activity(
             type=discord.ActivityType.playing,
             name="Arch Linux",
-            details="Running 24/7 in the cloud",
-            state="Uptime: 100%"
+            details="Triggered by Cron Job",
+            state="Status: Active"
         )
-        await self.change_presence(activity=activity)
+        asyncio.create_task(client.change_presence(activity=activity))
+        return {"status": "Task executed successfully"}
+    
+    return {"status": "Bot not ready yet"}
 
-if __name__ == "__main__":
-    # CRITICAL FIX: Start the web server FIRST so Render can bind to the port immediately
-    threading.Thread(target=run_web_server, daemon=True).start()
+@client.event
+async def on_ready():
+    print(f'Successfully authenticated account: {self.user}')
 
+# Start both FastAPI and Discord simultaneously inside the same event loop
+async def main():
     token = os.getenv("DISCORD_TOKEN")
     if not token:
-        print("❌ ERROR: DISCORD_TOKEN is missing in environment variables!")
-    else:
-        # Initialize client with empty intents for user account automation
-        client = MyClient(intents=discord.Intents.none())
-        client.run(token)
+        print("❌ ERROR: DISCORD_TOKEN is missing!")
+        return
+
+    port = int(os.environ.get("PORT", 10000))
+    
+    # Run Uvicorn config without block
+    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+    
+    # Run both tasks concurrently
+    await asyncio.gather(
+        server.serve(),
+        client.start(token)
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())
