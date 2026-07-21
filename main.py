@@ -1,23 +1,26 @@
 import discord
 import os
-import asyncio
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# 1. Tiny web server to trick Render's free tier health check
+# 1. Tiny web server for Render's free tier health check
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
-        self.send_header('Content-type', 'text/html')
+        self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(b"Bot is alive!")
 
+    # Silences logs in the console to keep output clean
+    def log_message(self, format, *args):
+        return
+
 def run_web_server():
-    # Render automatically tells the app what port to use via an env variable
-    port = int(os.environ.get("PORT", 8080))
+    # Render binds to 0.0.0.0. Using 10000 as a fallback if PORT isn't set.
+    port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
     print(f"Web server running on port {port}")
     server.serve_forever()
@@ -26,6 +29,8 @@ def run_web_server():
 class MyClient(discord.Client):
     async def on_ready(self):
         print(f'Logged in as {self.user}')
+        
+        # Defining the rich presence activity
         activity = discord.Activity(
             type=discord.ActivityType.playing,
             name="Arch Linux",
@@ -37,6 +42,9 @@ class MyClient(discord.Client):
 # Start the web server in a separate thread so it doesn't block Discord
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# Start Discord
-client = MyClient(intents=discord.Intents.default())
+# Start Discord with the required Presence Intent enabled
+intents = discord.Intents.default()
+intents.presences = True  # Required to update or change presence status
+
+client = MyClient(intents=intents)
 client.run(os.getenv("DISCORD_TOKEN"))
