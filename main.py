@@ -12,25 +12,22 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
-        self.wfile.write(b"Bot is alive!")
+        self.wfile.write(b"Alive")
 
-    # Silences logs in the console to keep output clean
     def log_message(self, format, *args):
         return
 
 def run_web_server():
-    # Render binds to 0.0.0.0. Using 10000 as a fallback if PORT isn't set.
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
-    print(f"Web server running on port {port}")
     server.serve_forever()
 
-# 2. Your actual Discord 24/7 Status code
+# 2. User Account Status Client
 class MyClient(discord.Client):
     async def on_ready(self):
-        print(f'Logged in as {self.user}')
+        print(f'Successfully authenticated account: {self.user}')
         
-        # Defining the rich presence activity
+        # User presence structures use CustomActivity or explicit Activity objects
         activity = discord.Activity(
             type=discord.ActivityType.playing,
             name="Arch Linux",
@@ -39,24 +36,16 @@ class MyClient(discord.Client):
         )
         await self.change_presence(activity=activity)
 
-# Start the web server in a separate thread so it doesn't block Discord
+# Start background web server
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# Start Discord with the required Presence Intent enabled
-intents = discord.Intents.default()
-intents.presences = True  # Required to update or change presence status
-
-client = MyClient(intents=intents)
-# Fetch the token from environment variables
+# Initialize the client without intents (required for user automation)
 token = os.getenv("DISCORD_TOKEN")
 
-# Verify the token exists before passing it to discord.py
 if not token:
-    print("❌ ERROR: DISCORD_TOKEN environment variable is missing or empty on Render!")
-elif len(token) < 50:
-    print(f"❌ ERROR: The token found seems too short ({len(token)} chars). Check for typos.")
+    print("❌ ERROR: DISCORD_TOKEN is missing on Render settings!")
 else:
-    # Start Discord safely
-    client = MyClient(intents=intents)
+    client = MyClient()
+    # User tokens are initialized directly without prefixes via the self fork
     client.run(token)
-
+s
